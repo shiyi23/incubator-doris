@@ -24,6 +24,7 @@
 #include <set>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include "agent/status.h"
@@ -47,7 +48,7 @@ class DataDir;
 class TabletManager {
 public:
     TabletManager(int32_t tablet_map_lock_shard_size);
-    ~TabletManager() = default;
+    ~TabletManager();
 
     bool check_tablet_id_exist(TTabletId tablet_id);
 
@@ -71,7 +72,9 @@ public:
 
     TabletSharedPtr find_best_tablet_to_compaction(CompactionType compaction_type,
                                                    DataDir* data_dir,
-                                                   vector<TTabletId>& tablet_submitted_compaction);
+                                                   const std::unordered_set<TTabletId>& tablet_submitted_compaction,
+                                                   uint32_t* score,
+                                                   std::shared_ptr<CumulativeCompactionPolicy> cumulative_compaction_policy);
 
     TabletSharedPtr get_tablet(TTabletId tablet_id, SchemaHash schema_hash,
                                bool include_deleted = false, std::string* err = nullptr);
@@ -210,6 +213,9 @@ private:
         std::set<int64_t> tablets_under_clone;
         std::set<int64_t> tablets_under_restore;
     };
+
+    // trace the memory use by meta of tablet
+    std::shared_ptr<MemTracker> _mem_tracker;
 
     const int32_t _tablets_shards_size;
     const int32_t _tablets_shards_mask;

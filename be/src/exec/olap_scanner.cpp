@@ -166,12 +166,13 @@ Status OlapScanner::_init_params(const std::vector<OlapScanRange*>& key_ranges,
              _params.rs_readers[0]->rowset()->start_version() == 0 &&
              !_params.rs_readers[0]->rowset()->rowset_meta()->is_segments_overlapping()) ||
             (_params.rs_readers.size() == 2 &&
-             _params.rs_readers[1]->rowset()->rowset_meta()->num_rows() == 0 &&
+             _params.rs_readers[0]->rowset()->rowset_meta()->num_rows() == 0 &&
              _params.rs_readers[1]->rowset()->start_version() == 2 &&
              !_params.rs_readers[1]->rowset()->rowset_meta()->is_segments_overlapping());
     if (_aggregation || single_version) {
         _params.return_columns = _return_columns;
     } else {
+        // we need to fetch all key columns to do the right aggregation on storage engine side.
         for (size_t i = 0; i < _tablet->num_key_columns(); ++i) {
             _params.return_columns.push_back(i);
         }
@@ -247,7 +248,9 @@ Status OlapScanner::get_batch(RuntimeState* state, RowBatch* batch, bool* eof) {
     bzero(tuple_buf, state->batch_size() * _tuple_desc->byte_size());
     Tuple* tuple = reinterpret_cast<Tuple*>(tuple_buf);
 
-    auto tracker = MemTracker::CreateTracker(state->fragment_mem_tracker()->limit(), "OlapScanner");
+    auto tracker = MemTracker::CreateTracker(state->fragment_mem_tracker()->limit(),
+                                             "OlapScanner:" + print_id(state->query_id()),
+                                             state->fragment_mem_tracker());
     std::unique_ptr<MemPool> mem_pool(new MemPool(tracker.get()));
 
     int64_t raw_rows_threshold = raw_rows_read() + config::doris_scanner_row_num;

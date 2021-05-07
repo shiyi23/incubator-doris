@@ -58,6 +58,7 @@ module.exports = [
           "sequence-column-manual",
           "spark-load-manual",
           "stream-load-manual",
+          "s3-load-manual",
           "delete-manual",
           "insert-into-manual",
           "load-json-format",
@@ -198,6 +199,7 @@ module.exports = [
       "odbc-of-doris",
       "plugin-development-manual",
       "spark-doris-connector",
+      "flink-doris-connector",
       {
         title: "UDF",
         directoryPath: "udf/",
@@ -550,6 +552,7 @@ module.exports = [
       "members",
       "gitter",
       "subscribe-mail-list",
+      "feedback",
       "how-to-contribute",
       "committer-guide",
       "pull-request",

@@ -72,11 +72,12 @@ public class SessionVariable implements Serializable, Writable {
     public static final int MIN_EXEC_MEM_LIMIT = 2097152;
     public static final String BATCH_SIZE = "batch_size";
     public static final String DISABLE_STREAMING_PREAGGREGATIONS = "disable_streaming_preaggregations";
-    public static final String DISABLE_COLOCATE_JOIN = "disable_colocate_join";
+    public static final String DISABLE_COLOCATE_PLAN = "disable_colocate_plan";
     public static final String ENABLE_BUCKET_SHUFFLE_JOIN = "enable_bucket_shuffle_join";
     public static final String PARALLEL_FRAGMENT_EXEC_INSTANCE_NUM = "parallel_fragment_exec_instance_num";
     public static final String ENABLE_INSERT_STRICT = "enable_insert_strict";
     public static final String ENABLE_SPILLING = "enable_spilling";
+    public static final String ENABLE_EXCHANGE_NODE_PARALLEL_MERGE = "enable_exchange_node_parallel_merge";
     public static final String PREFER_JOIN_METHOD = "prefer_join_method";
 
     public static final String ENABLE_ODBC_TRANSCATION = "enable_odbc_transcation";
@@ -123,6 +124,12 @@ public class SessionVariable implements Serializable, Writable {
     public static final long DEFAULT_INSERT_VISIBLE_TIMEOUT_MS = 10_000;
     public static final long MIN_INSERT_VISIBLE_TIMEOUT_MS = 1000; // If user set a very small value, use this value instead.
 
+    // session origin value
+    public Map<Field, String> sessionOriginValue = new HashMap<Field, String>();
+    // check stmt is or not [select /*+ SET_VAR(...)*/ ...]
+    // if it is setStmt, we needn't collect session origin value
+    public boolean isSingleSetVar = false;
+
     @VariableMgr.VarAttr(name = INSERT_VISIBLE_TIMEOUT_MS, needForward = true)
     public long insertVisibleTimeoutMs = DEFAULT_INSERT_VISIBLE_TIMEOUT_MS;
 
@@ -132,6 +139,9 @@ public class SessionVariable implements Serializable, Writable {
 
     @VariableMgr.VarAttr(name = ENABLE_SPILLING)
     public boolean enableSpilling = false;
+
+    @VariableMgr.VarAttr(name = ENABLE_EXCHANGE_NODE_PARALLEL_MERGE)
+    public boolean enableExchangeNodeParallelMerge = false;
 
     // query timeout in second.
     @VariableMgr.VarAttr(name = QUERY_TIMEOUT)
@@ -231,8 +241,8 @@ public class SessionVariable implements Serializable, Writable {
     @VariableMgr.VarAttr(name = DISABLE_STREAMING_PREAGGREGATIONS)
     public boolean disableStreamPreaggregations = false;
 
-    @VariableMgr.VarAttr(name = DISABLE_COLOCATE_JOIN)
-    public boolean disableColocateJoin = false;
+    @VariableMgr.VarAttr(name = DISABLE_COLOCATE_PLAN)
+    public boolean disableColocatePlan = false;
 
     @VariableMgr.VarAttr(name = ENABLE_BUCKET_SHUFFLE_JOIN)
     public boolean enableBucketShuffleJoin = true;
@@ -441,8 +451,8 @@ public class SessionVariable implements Serializable, Writable {
         this.resourceGroup = resourceGroup;
     }
 
-    public boolean isDisableColocateJoin() {
-        return disableColocateJoin;
+    public boolean isDisableColocatePlan() {
+        return disableColocatePlan;
     }
 
     public boolean isEnableBucketShuffleJoin() {
@@ -587,6 +597,26 @@ public class SessionVariable implements Serializable, Writable {
         }
     }
 
+    public boolean getIsSingleSetVar() {
+        return isSingleSetVar;
+    }
+
+    public void setIsSingleSetVar(boolean issinglesetvar) {
+        this.isSingleSetVar = issinglesetvar;
+    }
+
+    public Map<Field, String> getSessionOriginValue() {
+        return sessionOriginValue;
+    }
+
+    public void addSessionOriginValue(Field key, String value) {
+        sessionOriginValue.put(key, value);
+    }
+
+    public void clearSessionOriginValue() {
+        sessionOriginValue.clear();
+    }
+
     public boolean isDeleteWithoutPartition() {
         return deleteWithoutPartition;
     }
@@ -617,7 +647,9 @@ public class SessionVariable implements Serializable, Writable {
         if (maxPushdownConditionsPerColumn > -1) {
             tResult.setMaxPushdownConditionsPerColumn(maxPushdownConditionsPerColumn);
         }
+
         tResult.setEnableSpilling(enableSpilling);
+        tResult.setEnableEnableExchangeNodeParallelMerge(enableExchangeNodeParallelMerge);
         return tResult;
     }
 

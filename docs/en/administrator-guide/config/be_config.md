@@ -452,7 +452,7 @@ When the concurrency cannot be improved in high concurrency scenarios, try to re
 ### `heartbeat_service_thread_count`
 
 * Type: int32
-* Description: The number of threads that execute the heartbeat service on BE。 the default is 1, it is not recommended to modify
+* Description: The number of threads that execute the heartbeat service on BE. the default is 1, it is not recommended to modify
 * Default value: 1
 
 ### `ignore_broken_disk`
@@ -870,3 +870,18 @@ If the parameter is `THREAD_POOL`, the model is a blocking I/O model.
 * Type: int32
 * Description: If the number of rows in a page is less than this value, no zonemap will be created to reduce data expansion
 * Default: 20
+
+### `aws_log_level`
+
+* Type: int32
+* Description: log level of AWS SDK, 
+  ```
+     Off = 0,
+     Fatal = 1,
+     Error = 2,
+     Warn = 3,
+     Info = 4,
+     Debug = 5,
+     Trace = 6
+  ```
+* Default: 3

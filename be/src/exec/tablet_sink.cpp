@@ -31,6 +31,7 @@
 #include "util/debug/sanitizer_scopes.h"
 #include "util/monotime.h"
 #include "util/uid_util.h"
+#include "util/time.h"
 
 namespace doris {
 namespace stream_load {
@@ -83,6 +84,7 @@ Status NodeChannel::init(RuntimeState* state) {
     _cur_add_batch_request.set_eos(false);
 
     _rpc_timeout_ms = state->query_options().query_timeout * 1000;
+    _timeout_watch.start();
 
     _load_info = "load_id=" + print_id(_parent->_load_id) +
                  ", txn_id=" + std::to_string(_parent->_txn_id);
@@ -299,7 +301,11 @@ void NodeChannel::cancel() {
     auto closure = new RefCountClosure<PTabletWriterCancelResult>();
 
     closure->ref();
-    closure->cntl.set_timeout_ms(_rpc_timeout_ms);
+    int remain_ms = _rpc_timeout_ms - _timeout_watch.elapsed_time() / NANOS_PER_MILLIS;
+    if (UNLIKELY(remain_ms < _min_rpc_timeout_ms)) {
+        remain_ms = _min_rpc_timeout_ms;
+    }
+    closure->cntl.set_timeout_ms(remain_ms);
     if (config::tablet_writer_ignore_eovercrowded) {
         closure->cntl.ignore_eovercrowded();
     }
@@ -336,7 +342,16 @@ int NodeChannel::try_send_and_fetch_status() {
         }
 
         _add_batch_closure->reset();
-        _add_batch_closure->cntl.set_timeout_ms(_rpc_timeout_ms);
+        int remain_ms = _rpc_timeout_ms - _timeout_watch.elapsed_time() / NANOS_PER_MILLIS;
+        if (UNLIKELY(remain_ms < _min_rpc_timeout_ms)) {
+            if (remain_ms <= 0 && !request.eos()) {
+                cancel();
+                return 0;
+            } else {
+                remain_ms = _min_rpc_timeout_ms;
+            }
+        }
+        _add_batch_closure->cntl.set_timeout_ms(remain_ms);
         if (config::tablet_writer_ignore_eovercrowded) {
             _add_batch_closure->cntl.ignore_eovercrowded();
         }
@@ -447,6 +462,7 @@ OlapTableSink::OlapTableSink(ObjectPool* pool, const RowDescriptor& row_desc,
     if (!texprs.empty()) {
         *status = Expr::create_expr_trees(_pool, texprs, &_output_expr_ctxs);
     }
+    _name = "OlapTableSink";
 }
 
 OlapTableSink::~OlapTableSink() {
@@ -491,7 +507,8 @@ Status OlapTableSink::prepare(RuntimeState* state) {
 
     // profile must add to state's object pool
     _profile = state->obj_pool()->add(new RuntimeProfile("OlapTableSink"));
-    _mem_tracker = MemTracker::CreateTracker(-1, "OlapTableSink", state->instance_mem_tracker());
+    _mem_tracker = MemTracker::CreateTracker(-1, "OlapTableSink:" + std::to_string(state->load_job_id()),
+                                             state->instance_mem_tracker());
 
     SCOPED_TIMER(_profile->total_time_counter());
 

@@ -94,7 +94,7 @@ The SET_VAR hint sets the session value of a system variable temporarily (for th
 
 ```
 SELECT /*+ SET_VAR(exec_mem_limit = 8589934592) */ name FROM people ORDER BY name;
-SELECT /*+ SET_VAR(query_timeout = 1) */ sleep(3);
+SELECT /*+ SET_VAR(query_timeout = 1, enable_partition_cache=true) */ sleep(3);
 ```
 
 Note that the comment must start with /*+ and can only follow the SELECT.
@@ -382,3 +382,9 @@ Note that the comment must start with /*+ and can only follow the SELECT.
 
     When execute insert statement, doris will wait for the transaction to commit and visible after the import is completed.
     This parameter controls the timeout of waiting for transaction to be visible. The default value is 10000, and the minimum value is 1000.
+
+*  `enable_exchange_node_parallel_merge`
+
+    In a sort query, when an upper level node receives the ordered data of the lower level node, it will sort the corresponding data on the exchange node to ensure that the final data is ordered. However, when a single thread merges multiple channels of data, if the amount of data is too large, it will lead to a single point of exchange node merge bottleneck.
+
+    Doris optimizes this part if there are too many data nodes in the lower layer. Exchange node will start multithreading for parallel merging to speed up the sorting process. This parameter is false by default, which means that exchange node does not adopt parallel merge sort to reduce the extra CPU and memory consumption.

@@ -36,6 +36,14 @@
 #include "runtime/stream_load/load_stream_mgr.h"
 #include "runtime/stream_load/stream_load_pipe.h"
 #include "runtime/tuple.h"
+#include "exprs/expr.h"
+#include "exec/text_converter.h"
+#include "exec/text_converter.hpp"
+#include "exec/plain_text_line_reader.h"
+#include "exec/hdfs_file_reader.h"
+#include "exec/local_file_reader.h"
+#include "exec/broker_reader.h"
+#include "exec/decompressor.h"
 #include "util/utf8_check.h"
 
 namespace doris {
@@ -155,6 +163,13 @@ Status BrokerScanner::open_file_reader() {
     switch (range.file_type) {
     case TFileType::FILE_LOCAL: {
         LocalFileReader* file_reader = new LocalFileReader(range.path, start_offset);
+        RETURN_IF_ERROR(file_reader->open());
+        _cur_file_reader = file_reader;
+        break;
+    }
+    case TFileType::FILE_HDFS: {
+        HdfsFileReader* file_reader = new HdfsFileReader(
+                range.hdfs_params, range.path, start_offset);
         RETURN_IF_ERROR(file_reader->open());
         _cur_file_reader = file_reader;
         break;
@@ -305,23 +320,39 @@ void BrokerScanner::close() {
 
 void BrokerScanner::split_line(const Slice& line, std::vector<Slice>* values) {
     const char* value = line.data;
-    size_t i = 0;
-    // TODO improve the performance
-    while (i < line.size) {
-        if (i + _value_separator_length <= line.size) {
-            if (_value_separator.compare(0, _value_separator_length, line.data + i,
-                                         _value_separator_length) == 0) {
-                values->emplace_back(value, line.data + i - value);
-                value = line.data + i + _value_separator_length;
-                i += _value_separator_length;
-            } else {
-                ++i;
-            }
+    size_t start = 0; // point to the start pos of next col value.
+    size_t curpos= 0; // point to the start pos of separator matching sequence.
+    size_t p1 = 0;    // point to the current pos of separator matching sequence.
+
+    // Separator: AAAA
+    // 
+    //   curpos
+    //     ▼
+    //     AAAA
+    //   1000AAAA2000AAAA
+    //   ▲   ▲
+    // Start │
+    //       p1
+
+    while (curpos < line.size) {
+        if (*(value + curpos + p1) != _value_separator[p1]) {
+            // Not match, move forward:
+            curpos += (p1 == 0 ? 1 : p1);
+            p1 = 0;
         } else {
-            break;
+            p1++;
+            if (p1 == _value_separator_length) {
+                // Match a separator
+                values->emplace_back(value + start, curpos - start);
+                start = curpos + _value_separator_length;
+                curpos = start;
+                p1 = 0;
+            }
         }
     }
-    values->emplace_back(value, line.data + i - value);
+
+    CHECK(curpos == line.size) << curpos << " vs " <<  line.size;
+    values->emplace_back(value + start, curpos - start);
 }
 
 void BrokerScanner::fill_fix_length_string(const Slice& value, MemPool* pool, char** new_value_p,

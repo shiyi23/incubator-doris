@@ -43,13 +43,13 @@ import org.apache.doris.qe.ConnectContext;
 import org.apache.doris.qe.QueryState.MysqlStateType;
 import org.apache.doris.utframe.UtFrameUtils;
 
+import com.google.common.collect.Lists;
+
 import org.apache.commons.lang3.StringUtils;
 import org.junit.AfterClass;
 import org.junit.Assert;
 import org.junit.BeforeClass;
 import org.junit.Test;
-
-import com.google.common.collect.Lists;
 
 import java.io.File;
 import java.util.List;
@@ -1286,7 +1286,7 @@ public class QueryPlanTest {
     @Test
     public void testPreferBroadcastJoin() throws Exception {
         connectContext.setDatabase("default_cluster:test");
-        String queryStr = "explain select * from (select k1 from jointest group by k1)t2, jointest t1 where t1.k1 = t2.k1";
+        String queryStr = "explain select * from (select k2 from jointest group by k2)t2, jointest t1 where t1.k1 = t2.k2";
 
         // default set PreferBroadcastJoin true
         String explainString = UtFrameUtils.getSQLPlanOrErrorMsg(connectContext, queryStr);
@@ -1469,8 +1469,7 @@ public class QueryPlanTest {
         explainString = UtFrameUtils.getSQLPlanOrErrorMsg(connectContext, "EXPLAIN " + sql);
         System.out.println("wangxixu-explain:"+explainString);
         Assert.assertTrue(explainString.contains("PREDICATES: `query_time` < 1614614400, `query_time` >= 0"));
-        
+
     }
+
 }
-
-
