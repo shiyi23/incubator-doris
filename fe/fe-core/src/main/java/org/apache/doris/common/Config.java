@@ -103,7 +103,7 @@ public class Config extends ConfigBase {
      */
     @ConfField public static String audit_log_dir = PaloFe.DORIS_HOME_DIR + "/log";
     @ConfField public static int audit_log_roll_num = 90;
-    @ConfField public static String[] audit_log_modules = {"slow_query", "query", "load"};
+    @ConfField public static String[] audit_log_modules = {"slow_query", "query", "load", "stream_load"};
     @ConfField(mutable = true) public static long qe_slow_log_ms = 5000;
     @ConfField public static String audit_log_roll_interval = "DAY";
     @ConfField public static String audit_log_delete_age = "30d";
@@ -127,6 +127,12 @@ public class Config extends ConfigBase {
      */
     @ConfField(mutable = true, masterOnly = true)
     public static int label_keep_max_second = 3 * 24 * 3600; // 3 days
+
+    // For some high frequency load job such as
+    // INSERT、STREAMING LOAD、ROUTINE_LOAD_TASK
+    // Remove the finished job or task if expired.
+    @ConfField(mutable = true, masterOnly = true)
+    public static int streaming_label_keep_max_second = 43200; // 12 hour
   
     /**
      * The max keep time of some kind of jobs.
@@ -250,7 +256,9 @@ public class Config extends ConfigBase {
      * Default is "0.0.0.0", which means not set.
      * CAN NOT set this as a hostname, only IP.
      */
-    @ConfField public static String frontend_address = "0.0.0.0";
+    @Deprecated
+    @ConfField
+    public static String frontend_address = "0.0.0.0";
 
     /**
      * Declare a selection strategy for those servers have many ips.
@@ -584,7 +592,25 @@ public class Config extends ConfigBase {
      */
     @ConfField(mutable = true, masterOnly = true)
     public static int desired_max_waiting_jobs = 100;
-  
+
+    /**
+     * fetch stream load record interval.
+     */
+    @ConfField(mutable = true, masterOnly = true)
+    public static int fetch_stream_load_record_interval_second = 120;
+
+    /**
+     * Default max number of recent stream load record that can be stored in memory.
+     */
+    @ConfField(mutable = true, masterOnly = true)
+    public static int max_stream_load_record_size = 5000;
+
+    /**
+     * Whether to disable show stream load and clear stream load records in memory.
+     */
+    @ConfField(mutable = true, masterOnly = true)
+    public static boolean disable_show_stream_load = false;
+
     /**
      * maximum concurrent running txn num including prepare, commit txns under a single db
      * txn manager will reject coming txns
@@ -781,10 +807,16 @@ public class Config extends ConfigBase {
     public static int query_colocate_join_memory_limit_penalty_factor = 1;
 
     /**
-     * Deprecated after 0.10
+     * This configs can set to true to disable the automatic colocate tables's relocate and balance.
+     * If 'disable_colocate_balance' is set to true,
+     *   ColocateTableBalancer will not relocate and balance colocate tables.
+     * Attention:
+     *   Under normal circumstances, there is no need to turn off balance at all.
+     *   Because once the balance is turned off, the unstable colocate table may not be restored
+     *   Eventually the colocate plan cannot be used when querying.
      */
-    @ConfField
-    public static boolean disable_colocate_join = false;
+    @ConfField(mutable = true, masterOnly = true) public static boolean disable_colocate_balance = false;
+
     /**
      * The default user resource publishing timeout.
      */
@@ -892,13 +924,6 @@ public class Config extends ConfigBase {
     // All frontends will get tablet stat from all backends at each interval
     @ConfField public static int tablet_stat_update_interval_second = 300;  // 5 min
 
-    // May be necessary to modify the following BRPC configurations in high concurrency scenarios. 
-    // The number of concurrent requests BRPC can processed
-    @ConfField public static int brpc_number_of_concurrent_requests_processed = 4096;
-
-    // BRPC idle wait time (ms)
-    @ConfField public static int brpc_idle_wait_max_time = 10000;
-    
     /**
      * if set to false, auth check will be disable, in case some goes wrong with the new privilege system. 
      */
@@ -1093,14 +1118,6 @@ public class Config extends ConfigBase {
      * Save small files
      */
     @ConfField public static String small_file_dir = PaloFe.DORIS_HOME_DIR + "/small_files";
-    
-    /**
-     * The following 2 configs can set to true to disable the automatic colocate tables's relocate and balance.
-     * if 'disable_colocate_relocate' is set to true, ColocateTableBalancer will not relocate colocate tables when Backend unavailable.
-     * if 'disable_colocate_balance' is set to true, ColocateTableBalancer will not balance colocate tables.
-     */
-    @ConfField(mutable = true, masterOnly = true) public static boolean disable_colocate_relocate = false;
-    @ConfField(mutable = true, masterOnly = true) public static boolean disable_colocate_balance = false;
 
     /**
      * If set to true, the insert stmt with processing error will still return a label to user.
@@ -1167,7 +1184,7 @@ public class Config extends ConfigBase {
      * If set to true, Doris will check if the compiled and running versions of Java are compatible
      */
     @ConfField
-    public static boolean check_java_version = true;
+    public static boolean check_java_version = false;
 
     /**
      * control materialized view
@@ -1349,4 +1366,17 @@ public class Config extends ConfigBase {
      */
     @ConfField(mutable = true, masterOnly = true)
     public static boolean enable_access_file_without_broker = false;
+
+    /**
+     * Whether to allow the outfile function to export the results to the local disk.
+     */
+    @ConfField
+    public static boolean enable_outfile_to_local = false;
+
+    /**
+     * Used to set the initial flow window size of the GRPC client channel, and also used to max message size.
+     * When the result set is large, you may need to increase this value.
+     */
+    @ConfField
+    public static int grpc_max_message_size_bytes = 1 * 1024 * 1024 * 1024; // 1GB
 }

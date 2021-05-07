@@ -17,9 +17,8 @@
 
 package org.apache.doris.task;
 
-import org.apache.doris.analysis.ColumnSeparator;
+import org.apache.doris.analysis.Separator;
 import org.apache.doris.analysis.Expr;
-import org.apache.doris.analysis.ImportColumnDesc;
 import org.apache.doris.analysis.ImportColumnsStmt;
 import org.apache.doris.analysis.ImportWhereStmt;
 import org.apache.doris.analysis.PartitionNames;
@@ -43,7 +42,6 @@ import com.google.common.base.Strings;
 import com.google.common.collect.Lists;
 
 import java.io.StringReader;
-import java.util.List;
 
 public class StreamLoadTask implements LoadTaskInfo {
 
@@ -60,9 +58,10 @@ public class StreamLoadTask implements LoadTaskInfo {
     private boolean fuzzyParse;
 
     // optional
-    private List<ImportColumnDesc> columnExprDescs = Lists.newArrayList();
+    private ImportColumnDescs columnExprDescs = new ImportColumnDescs();
     private Expr whereExpr;
-    private ColumnSeparator columnSeparator;
+    private Separator columnSeparator;
+    private Separator lineDelimiter;
     private PartitionNames partitions;
     private String path;
     private boolean negative;
@@ -102,7 +101,7 @@ public class StreamLoadTask implements LoadTaskInfo {
         return formatType;
     }
 
-    public List<ImportColumnDesc> getColumnExprDescs() {
+    public ImportColumnDescs getColumnExprDescs() {
         return columnExprDescs;
     }
 
@@ -114,8 +113,12 @@ public class StreamLoadTask implements LoadTaskInfo {
         return whereExpr;
     }
 
-    public ColumnSeparator getColumnSeparator() {
+    public Separator getColumnSeparator() {
         return columnSeparator;
+    }
+
+    public Separator getLineDelimiter() {
+        return lineDelimiter;
     }
 
     public PartitionNames getPartitions() {
@@ -217,6 +220,9 @@ public class StreamLoadTask implements LoadTaskInfo {
         if (request.isSetColumnSeparator()) {
             setColumnSeparator(request.getColumnSeparator());
         }
+        if (request.isSetLineDelimiter()) {
+            setLineDelimiter(request.getLineDelimiter());
+        }
         if (request.isSetPartitions()) {
             String[] partNames = request.getPartitions().trim().split("\\s*,\\s*");
             if (request.isSetIsTempPartition()) {
@@ -301,7 +307,7 @@ public class StreamLoadTask implements LoadTaskInfo {
         }
 
         if (columnsStmt.getColumns() != null && !columnsStmt.getColumns().isEmpty()) {
-            columnExprDescs = columnsStmt.getColumns();
+            columnExprDescs.descs = columnsStmt.getColumns();
         }
     }
 
@@ -331,8 +337,13 @@ public class StreamLoadTask implements LoadTaskInfo {
     }
 
     private void setColumnSeparator(String oriSeparator) throws AnalysisException {
-        columnSeparator = new ColumnSeparator(oriSeparator);
+        columnSeparator = new Separator(oriSeparator);
         columnSeparator.analyze();
+    }
+
+    private void setLineDelimiter(String oriLineDelimiter) throws AnalysisException {
+        lineDelimiter = new Separator(oriLineDelimiter);
+        lineDelimiter.analyze();
     }
 
     @Override

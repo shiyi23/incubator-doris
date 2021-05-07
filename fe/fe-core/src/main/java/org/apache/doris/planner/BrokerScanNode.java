@@ -40,6 +40,7 @@ import org.apache.doris.load.BrokerFileGroup;
 import org.apache.doris.load.Load;
 import org.apache.doris.load.loadv2.LoadTask;
 import org.apache.doris.system.Backend;
+import org.apache.doris.task.LoadTaskInfo;
 import org.apache.doris.thrift.TBrokerFileStatus;
 import org.apache.doris.thrift.TBrokerRangeDesc;
 import org.apache.doris.thrift.TBrokerScanRange;
@@ -51,13 +52,13 @@ import org.apache.doris.thrift.TScanRange;
 import org.apache.doris.thrift.TScanRangeLocation;
 import org.apache.doris.thrift.TScanRangeLocations;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
-
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 
 import java.nio.charset.Charset;
 import java.util.ArrayList;
@@ -200,6 +201,10 @@ public class BrokerScanNode extends LoadScanNode {
         BrokerFileGroup fileGroup = context.fileGroup;
         params.setColumnSeparator(fileGroup.getValueSeparator().getBytes(Charset.forName("UTF-8"))[0]);
         params.setLineDelimiter(fileGroup.getLineDelimiter().getBytes(Charset.forName("UTF-8"))[0]);
+        params.setColumnSeparatorStr(fileGroup.getValueSeparator());
+        params.setLineDelimiterStr(fileGroup.getLineDelimiter());
+        params.setColumnSeparatorLength(fileGroup.getValueSeparator().getBytes(Charset.forName("UTF-8")).length);
+        params.setLineDelimiterLength(fileGroup.getLineDelimiter().getBytes(Charset.forName("UTF-8")).length);
         params.setStrictMode(strictMode);
         params.setProperties(brokerDesc.getProperties());
         deleteCondition = fileGroup.getDeleteCondition();
@@ -226,22 +231,22 @@ public class BrokerScanNode extends LoadScanNode {
 
         // for load job, column exprs is got from file group
         // for query, there is no column exprs, they will be got from table's schema in "Load.initColumns"
-        List<ImportColumnDesc> columnExprs = Lists.newArrayList();
+        LoadTaskInfo.ImportColumnDescs columnDescs = new LoadTaskInfo.ImportColumnDescs();
         if (isLoad()) {
-            columnExprs = context.fileGroup.getColumnExprList();
+            columnDescs.descs = context.fileGroup.getColumnExprList();
             if (mergeType == LoadTask.MergeType.MERGE) {
-                columnExprs.add(ImportColumnDesc.newDeleteSignImportColumnDesc(deleteCondition));
+                columnDescs.descs.add(ImportColumnDesc.newDeleteSignImportColumnDesc(deleteCondition));
             } else if (mergeType == LoadTask.MergeType.DELETE) {
-                columnExprs.add(ImportColumnDesc.newDeleteSignImportColumnDesc(new IntLiteral(1)));
+                columnDescs.descs.add(ImportColumnDesc.newDeleteSignImportColumnDesc(new IntLiteral(1)));
             }
             // add columnExpr for sequence column
             if (context.fileGroup.hasSequenceCol()) {
-                columnExprs.add(new ImportColumnDesc(Column.SEQUENCE_COL,
+                columnDescs.descs.add(new ImportColumnDesc(Column.SEQUENCE_COL,
                         new SlotRef(null, context.fileGroup.getSequenceCol())));
             }
         }
 
-        Load.initColumns(targetTable, columnExprs,
+        Load.initColumns(targetTable, columnDescs,
                 context.fileGroup.getColumnToHadoopFunction(), context.exprMap, analyzer,
                 context.srcTupleDescriptor, context.slotDescByName, context.params);
     }
@@ -534,13 +539,15 @@ public class BrokerScanNode extends LoadScanNode {
     }
 
     @Override
-    protected String getNodeExplainString(String prefix, TExplainLevel detailLevel) {
+    public String getNodeExplainString(String prefix, TExplainLevel detailLevel) {
         StringBuilder output = new StringBuilder();
         if (!isLoad()) {
             BrokerTable brokerTable = (BrokerTable) targetTable;
             output.append(prefix).append("TABLE: ").append(brokerTable.getName()).append("\n");
-            output.append(prefix).append("PATH: ")
-                    .append(Joiner.on(",").join(brokerTable.getPaths())).append("\",\n");
+            if (detailLevel != TExplainLevel.BRIEF) {
+                output.append(prefix).append("PATH: ")
+                        .append(Joiner.on(",").join(brokerTable.getPaths())).append("\",\n");
+            }
         }
         output.append(prefix).append("BROKER: ").append(brokerDesc.getName()).append("\n");
         return output.toString();

@@ -31,6 +31,7 @@
 #include <utility>
 
 #include "common/logging.h"
+#include "udf/udf.h"
 #include "util/coding.h"
 
 namespace doris {
@@ -1035,7 +1036,9 @@ public:
                     case EMPTY:
                         break;
                     case SINGLE:
-                        remove(rhs._sv);
+                        if (rhs._bitmap.contains(_sv)) {
+                            _type = EMPTY;
+                        }
                         break;
                     case BITMAP:
                         _bitmap -= rhs._bitmap;
@@ -1283,6 +1286,17 @@ public:
             return false;
         }
         return true;
+    }
+
+    doris_udf::BigIntVal minimum() {
+        switch (_type) {
+        case SINGLE:
+            return doris_udf::BigIntVal(_sv);
+        case BITMAP:
+            return doris_udf::BigIntVal(_bitmap.minimum());
+        default:
+            return doris_udf::BigIntVal::null();
+        }
     }
 
     // TODO limit string size to avoid OOM

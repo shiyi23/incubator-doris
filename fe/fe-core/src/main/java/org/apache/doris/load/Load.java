@@ -22,7 +22,6 @@ import org.apache.doris.analysis.Analyzer;
 import org.apache.doris.analysis.BinaryPredicate;
 import org.apache.doris.analysis.CancelLoadStmt;
 import org.apache.doris.analysis.CastExpr;
-import org.apache.doris.analysis.ColumnSeparator;
 import org.apache.doris.analysis.DataDescription;
 import org.apache.doris.analysis.Expr;
 import org.apache.doris.analysis.ExprSubstitutionMap;
@@ -35,6 +34,7 @@ import org.apache.doris.analysis.LabelName;
 import org.apache.doris.analysis.LoadStmt;
 import org.apache.doris.analysis.NullLiteral;
 import org.apache.doris.analysis.PartitionNames;
+import org.apache.doris.analysis.Separator;
 import org.apache.doris.analysis.SlotDescriptor;
 import org.apache.doris.analysis.SlotRef;
 import org.apache.doris.analysis.StorageBackend;
@@ -88,6 +88,7 @@ import org.apache.doris.qe.ConnectContext;
 import org.apache.doris.system.Backend;
 import org.apache.doris.task.AgentClient;
 import org.apache.doris.task.AgentTaskQueue;
+import org.apache.doris.task.LoadTaskInfo;
 import org.apache.doris.task.PushTask;
 import org.apache.doris.thrift.TBrokerScanRangeParams;
 import org.apache.doris.thrift.TEtlState;
@@ -96,17 +97,17 @@ import org.apache.doris.thrift.TNetworkAddress;
 import org.apache.doris.thrift.TPriority;
 import org.apache.doris.transaction.TransactionNotFoundException;
 
+import org.apache.commons.collections.CollectionUtils;
+import org.apache.commons.lang.StringUtils;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 import com.google.common.base.Preconditions;
 import com.google.common.base.Strings;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import com.google.gson.Gson;
-
-import org.apache.commons.collections.CollectionUtils;
-import org.apache.commons.lang.StringUtils;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -258,9 +259,9 @@ public class Load {
         // partitions | column names | separator | line delimiter
         List<String> partitionNames = null;
         List<String> columnNames = null;
-        ColumnSeparator columnSeparator = null;
+        Separator columnSeparator = null;
         List<String> hllColumnPairList = null;
-        String lineDelimiter = null;
+        Separator lineDelimiter = null;
         String formatType = null;
         if (params != null) {
             String specifiedPartitions = params.get(LoadStmt.KEY_IN_PARAM_PARTITIONS);
@@ -282,14 +283,25 @@ public class Load {
                 if (columnSeparatorStr.isEmpty()) {
                     columnSeparatorStr = "\t";
                 }
-                columnSeparator = new ColumnSeparator(columnSeparatorStr);
+                columnSeparator = new Separator(columnSeparatorStr);
                 try {
                     columnSeparator.analyze();
                 } catch (AnalysisException e) {
                     throw new DdlException(e.getMessage());
                 }
             }
-            lineDelimiter = params.get(LoadStmt.KEY_IN_PARAM_LINE_DELIMITER);
+            String lineDelimiterStr = params.get(LoadStmt.KEY_IN_PARAM_LINE_DELIMITER);
+            if (lineDelimiterStr != null) {
+                if (lineDelimiterStr.isEmpty()) {
+                    lineDelimiterStr = "\n";
+                }
+                lineDelimiter = new Separator(lineDelimiterStr);
+                try {
+                    lineDelimiter.analyze();
+                } catch (AnalysisException e) {
+                    throw new DdlException(e.getMessage());
+                }
+            }
             formatType = params.get(LoadStmt.KEY_IN_PARAM_FORMAT_TYPE);
         }
 
@@ -913,12 +925,12 @@ public class Load {
      * This function should be used for broker load v2 and stream load.
      * And it must be called in same db lock when planing.
      */
-    public static void initColumns(Table tbl, List<ImportColumnDesc> columnExprs,
+    public static void initColumns(Table tbl, LoadTaskInfo.ImportColumnDescs columnDescs,
                                    Map<String, Pair<String, List<String>>> columnToHadoopFunction,
                                    Map<String, Expr> exprsByName, Analyzer analyzer, TupleDescriptor srcTupleDesc,
                                    Map<String, SlotDescriptor> slotDescByName, TBrokerScanRangeParams params) throws UserException {
-        rewriteColumns(columnExprs);
-        initColumns(tbl, columnExprs, columnToHadoopFunction, exprsByName, analyzer,
+        rewriteColumns(columnDescs);
+        initColumns(tbl, columnDescs.descs, columnToHadoopFunction, exprsByName, analyzer,
                 srcTupleDesc, slotDescByName, params, true);
     }
 
@@ -1109,12 +1121,16 @@ public class Load {
         LOG.debug("after init column, exprMap: {}", exprsByName);
     }
 
-    public static void rewriteColumns(List<ImportColumnDesc> columnExprs) {
+    public static void rewriteColumns(LoadTaskInfo.ImportColumnDescs columnDescs) {
+        if (columnDescs.isColumnDescsRewrited) {
+            return;
+        }
+
         Map<String, Expr> derivativeColumns = new HashMap<>();
         // find and rewrite the derivative columns
         // e.g. (v1,v2=v1+1,v3=v2+1) --> (v1, v2=v1+1, v3=v1+1+1)
         // 1. find the derivative columns
-        for (ImportColumnDesc importColumnDesc : columnExprs) {
+        for (ImportColumnDesc importColumnDesc : columnDescs.descs) {
             if (!importColumnDesc.isColumn()) {
                 if (importColumnDesc.getExpr() instanceof SlotRef) {
                     String columnName = ((SlotRef) importColumnDesc.getExpr()).getColumnName();
@@ -1128,6 +1144,7 @@ public class Load {
             }
         }
 
+        columnDescs.isColumnDescsRewrited = true;
     }
 
     private static void recursiveRewrite(Expr expr, Map<String, Expr> derivativeColumns) {
@@ -2591,8 +2608,7 @@ public class Load {
             while (iter.hasNext()) {
                 Map.Entry<Long, LoadJob> entry = iter.next();
                 LoadJob job = entry.getValue();
-                if ((currentTimeMs - job.getCreateTimeMs()) / 1000 > Config.label_keep_max_second
-                        && (job.getState() == JobState.FINISHED || job.getState() == JobState.CANCELLED)) {
+                if (job.isExpired(currentTimeMs)) {
                     long dbId = job.getDbId();
                     String label = job.getLabel();
                     // Remove job from idToLoadJob

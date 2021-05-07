@@ -15,8 +15,6 @@
 # specific language governing permissions and limitations
 # under the License.
 
-cmake_minimum_required(VERSION 2.6)
-
 # where to put generated libraries
 set(LIBRARY_OUTPUT_PATH "${BUILD_DIR}/src/exec")
 
@@ -42,6 +40,7 @@ set(EXEC_FILES
     hash_join_node.cpp
     hash_join_node_ir.cpp
     hash_table.cpp
+    hdfs_file_reader.cpp
     local_file_reader.cpp
     merge_node.cpp
     merge_join_node.cpp

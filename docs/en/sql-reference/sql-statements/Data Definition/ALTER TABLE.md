@@ -223,7 +223,7 @@ under the License.
 
     [table]
     1. Modify the default number of replications of the table, which is used as default number of replications while creating new partition.
-        ATLER TABLE example_db.my_table 
+        ALTER TABLE example_db.my_table 
         SET ("default.replication_num" = "2");
         
     2. Modify the actual number of replications of a unpartitioned table (unpartitioned table only)
@@ -318,9 +318,10 @@ under the License.
         DROP COLUMN col2
         FROM example_rollup_index;
         
-    7. Modify the base index's col1 column to be of type BIGINT and move to the col2 column
+    7. Modify the base index's col1 key column to be of type BIGINT and move to the col2 column
+       (*Attention: Whether to modify the key column or the value column, complete column information need to be declared. For example, MODIFY COLUMN xxx COLUMNTYPE [KEY|agg_type]*)
         ALTER TABLE example_db.my_table
-        MODIFY COLUMN col1 BIGINT DEFAULT "1" AFTER col2;
+        MODIFY COLUMN col1 BIGINT KEY DEFAULT "1" AFTER col2;
 
     8. Modify the maximum length of the val1 column of the base index. The original val1 is (val1 VARCHAR(32) REPLACE DEFAULT "abc")
         ALTER TABLE example_db.my_table

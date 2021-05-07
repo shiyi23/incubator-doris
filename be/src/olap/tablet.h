@@ -56,7 +56,7 @@ public:
                                                    DataDir* data_dir = nullptr);
 
     Tablet(TabletMetaSharedPtr tablet_meta, DataDir* data_dir,
-           const std::string& cumulative_compaction_type = config::cumulative_compaction_policy);
+           const std::string& cumulative_compaction_type = "");
 
     OLAPStatus init();
     inline bool init_succeeded();
@@ -95,8 +95,8 @@ public:
 
     // operation in rowsets
     OLAPStatus add_rowset(RowsetSharedPtr rowset, bool need_persist = true);
-    void modify_rowsets(const vector<RowsetSharedPtr>& to_add,
-                        const vector<RowsetSharedPtr>& to_delete);
+    void modify_rowsets(vector<RowsetSharedPtr>& to_add,
+                        vector<RowsetSharedPtr>& to_delete);
 
     // _rs_version_map and _stale_rs_version_map should be protected by _meta_lock
     // The caller must call hold _meta_lock when call this two function.
@@ -162,7 +162,8 @@ public:
 
     // operation for compaction
     bool can_do_compaction();
-    const uint32_t calc_compaction_score(CompactionType compaction_type) const;
+    uint32_t calc_compaction_score(CompactionType compaction_type,
+               std::shared_ptr<CumulativeCompactionPolicy> cumulative_compaction_policy);
     static void compute_version_hash_from_rowsets(const std::vector<RowsetSharedPtr>& rowsets,
                                                   VersionHash* version_hash);
 
@@ -223,7 +224,8 @@ public:
     // eco mode also means save money in palo
     inline bool in_eco_mode() { return false; }
 
-    void do_tablet_meta_checkpoint();
+	// return true if the checkpoint is actually done
+    bool do_tablet_meta_checkpoint();
 
     // Check whether the rowset is useful or not, unuseful rowset can be swept up then.
     // Rowset which is under tablet's management is useful, i.e. rowset is in
@@ -263,7 +265,8 @@ private:
     OLAPStatus _capture_consistent_rowsets_unlocked(const vector<Version>& version_path,
                                                     vector<RowsetSharedPtr>* rowsets) const;
 
-    const uint32_t _calc_cumulative_compaction_score() const;
+    const uint32_t _calc_cumulative_compaction_score(
+            std::shared_ptr<CumulativeCompactionPolicy> cumulative_compaction_policy);
     const uint32_t _calc_base_compaction_score() const;
 
 public:
@@ -307,7 +310,7 @@ private:
     std::atomic<int64_t> _last_checkpoint_time;
 
     // cumulative compaction policy
-    std::unique_ptr<CumulativeCompactionPolicy> _cumulative_compaction_policy;
+    std::shared_ptr<CumulativeCompactionPolicy> _cumulative_compaction_policy;
     std::string _cumulative_compaction_type;
 
     // the value of metric 'query_scan_count' and timestamp will be recorded when every time
@@ -355,6 +358,9 @@ inline const int64_t Tablet::cumulative_layer_point() const {
 }
 
 inline void Tablet::set_cumulative_layer_point(int64_t new_point) {
+    // cumulative point should only be reset to -1, or be increased
+    CHECK(new_point == Tablet::K_INVALID_CUMULATIVE_POINT || new_point >= _cumulative_point)
+        << "Unexpected cumulative point: " << new_point << ", origin: " << _cumulative_point.load();
     _cumulative_point = new_point;
 }
 

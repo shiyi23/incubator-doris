@@ -304,12 +304,6 @@ OLAPStatus TabletMeta::serialize(string* meta_binary) {
     if (!serialize_success) {
         LOG(FATAL) << "failed to serialize meta " << full_name();
     }
-    // deserialize the meta to check the result is correct
-    TabletMetaPB de_tablet_meta_pb;
-    bool parsed = de_tablet_meta_pb.ParseFromString(*meta_binary);
-    if (!parsed) {
-        LOG(FATAL) << "deserialize from previous serialize result failed " << full_name();
-    }
     return OLAP_SUCCESS;
 }
 
@@ -443,6 +437,12 @@ void TabletMeta::to_meta_pb(TabletMetaPB* tablet_meta_pb) {
     }
 }
 
+uint32_t TabletMeta::mem_size() const {
+    auto size = sizeof(TabletMeta);
+    size += _schema.mem_size();
+    return size;
+}
+
 void TabletMeta::to_json(string* json_string, json2pb::Pb2JsonOptions& options) {
     TabletMetaPB tablet_meta_pb;
     to_meta_pb(&tablet_meta_pb);
@@ -499,7 +499,8 @@ void TabletMeta::delete_rs_meta_by_version(const Version& version,
 }
 
 void TabletMeta::modify_rs_metas(const std::vector<RowsetMetaSharedPtr>& to_add,
-                                 const std::vector<RowsetMetaSharedPtr>& to_delete) {
+                                 const std::vector<RowsetMetaSharedPtr>& to_delete,
+                                 bool same_version) {
     // Remove to_delete rowsets from _rs_metas
     for (auto rs_to_del : to_delete) {
         auto it = _rs_metas.begin();
@@ -516,18 +517,25 @@ void TabletMeta::modify_rs_metas(const std::vector<RowsetMetaSharedPtr>& to_add,
             }
         }
     }
-    // put to_delete rowsets in _stale_rs_metas.
-    _stale_rs_metas.insert(_stale_rs_metas.end(), to_delete.begin(), to_delete.end());
+    if (!same_version) {
+        // put to_delete rowsets in _stale_rs_metas.
+        _stale_rs_metas.insert(_stale_rs_metas.end(), to_delete.begin(), to_delete.end());
+    }
     // put to_add rowsets in _rs_metas.
     _rs_metas.insert(_rs_metas.end(), to_add.begin(), to_add.end());
 }
 
+// Use the passing "rs_metas" to replace the rs meta in this tablet meta
+// Also clear the _stale_rs_metas because this tablet meta maybe copyied from
+// an existing tablet before. Add after revise, only the passing "rs_metas"
+// is needed.
 void TabletMeta::revise_rs_metas(std::vector<RowsetMetaSharedPtr>&& rs_metas) {
     WriteLock wrlock(&_meta_lock);
     // delete alter task
     _alter_task.reset();
 
     _rs_metas = std::move(rs_metas);
+    _stale_rs_metas.clear();
 }
 
 void TabletMeta::delete_stale_rs_meta_by_version(const Version& version) {
