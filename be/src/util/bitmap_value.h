@@ -1299,6 +1299,21 @@ public:
         }
     }
 
+    doris_udf::BigIntVal maxmum() {
+        switch (_type)
+        {
+        case SINGLE:
+            return doris_udf::BigIntVal(_sv);
+            break;
+        case BITMAP:
+            return doris_udf::BigIntVal(_bitmap.maximum());
+            break;
+        default:
+            return doris_udf::BigIntVal::null();
+            break;
+        }
+    }
+
     // TODO limit string size to avoid OOM
     std::string to_string() const {
         std::stringstream ss;

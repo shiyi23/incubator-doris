@@ -56,7 +56,7 @@ public:
     static void bitmap_intersect(FunctionContext* ctx, const StringVal& src, StringVal* dst);
     static BigIntVal bitmap_count(FunctionContext* ctx, const StringVal& src);
     static BigIntVal bitmap_min(FunctionContext* ctx, const StringVal& str);
-
+    static BigIntVal bitmap_max(FunctionContext* ctx, const StringVal& str);
     static StringVal bitmap_serialize(FunctionContext* ctx, const StringVal& src);
     static StringVal to_bitmap(FunctionContext* ctx, const StringVal& src);
     static StringVal bitmap_hash(FunctionContext* ctx, const StringVal& src);
@@ -64,6 +64,7 @@ public:
     static StringVal bitmap_xor(FunctionContext* ctx, const StringVal& src, const StringVal& dst);
     static StringVal bitmap_and(FunctionContext* ctx, const StringVal& src, const StringVal& dst);
     static StringVal bitmap_not(FunctionContext* ctx, const StringVal& src, const StringVal& dst);
+    static StringVal bitmap_andnot(FunctionContext* ctx, const StringVal& src, const StringVal& dst);
     static StringVal bitmap_to_string(FunctionContext* ctx, const StringVal& input);
     // Convert a comma separated string to a Bitmap
     // Example:
