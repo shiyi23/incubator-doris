@@ -1,10 +1,9 @@
 ---
 {
-    "title": "bitmap_andnot",
+    "title": "bitmap_max",
     "language": "en"
 }
 ---
-
 <!-- 
 Licensed to the Apache Software Foundation (ASF) under one
 or more contributor license agreements.  See the NOTICE file
@@ -24,19 +23,20 @@ specific language governing permissions and limitations
 under the License.
 -->
 
-# bitmap_andnot
+# bitmap_max
 ## description
 ### Syntax
 
-`BITMAP BITMAP_ANDNOT(BITMAP lhs, BITMAP rhs)`
+`BIGINT BITMAP_MAX(BITMAP input)`
 
-Compute the andnot result of two inputs bitmap, return the new bitmap.
+Calculate and return the max values of a bitmap.
 
 ## example
+
 ```
 
 ```
 
 ## keyword
-    
-    BITMAP_ANDNOT,BITMAP
+
+    BITMAP_MAX,BITMAP

@@ -353,6 +353,19 @@ BigIntVal BitmapFunctions::bitmap_min(FunctionContext* ctx, const StringVal& src
     }
 }
 
+BigIntVal BitmapFunctions::bitmap_max(FunctionContext* ctx, const StringVal& src) {
+    if (src.is_null) {
+        return BigIntVal::null();
+    }
+
+    if (src.len == 0) {
+        return reinterpret_cast<BitmapValue*>(src.ptr)->maxmum();
+    } else {
+        auto bitmap = BitmapValue((char*)src.ptr);
+        return bitmap.maxmum();
+    }
+}
+
 StringVal BitmapFunctions::to_bitmap(doris_udf::FunctionContext* ctx,
                                      const doris_udf::StringVal& src) {
     BitmapValue bitmap;

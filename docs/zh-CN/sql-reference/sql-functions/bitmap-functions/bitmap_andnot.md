@@ -1,7 +1,7 @@
 ---
 {
     "title": "bitmap_andnot",
-    "language": "en"
+    "language": "zh-CN"
 }
 ---
 
@@ -30,13 +30,13 @@ under the License.
 
 `BITMAP BITMAP_ANDNOT(BITMAP lhs, BITMAP rhs)`
 
-Compute the andnot result of two inputs bitmap, return the new bitmap.
+计算两个输入的bitmap的交集的非，返回新的bitmap.
 
 ## example
-```
 
 ```
 
-## keyword
-    
-    BITMAP_ANDNOT,BITMAP
+```
+
+## keywrod
+    BITMAP_ANDNOT, BITMAP

@@ -243,6 +243,34 @@ TEST_F(BitmapFunctionsTest, bitmap_min) {
     ASSERT_EQ(BigIntVal(2), result);
 }
 
+TEST_F(BitmapFunctionsTest, bitmap_max) {
+    //null()'s max value is itself.
+    BigIntVal result = BitmapFunctions::bitmap_max(ctx, StringVal::null());
+    ASSERT_TRUE(result.is_null);
+
+    //bitmap is empty
+    BitmapValue bitmap1;
+    StringVal empty_str = convert_bitmap_to_string(ctx, bitmap1);
+    result = BitmapFunctions::bitmap_max(ctx, empty_str);
+    ASSERT_TRUE(result.is_null);
+
+    //bitmap has just only one value.
+    BitmapValue bitmap2 = BitmapValue(1024);
+    StringVal bit_str = convert_bitmap_to_string(ctx,bitmap2);
+    result = BitmapFunctions::bitmap_max(ctx, bit_str);
+    ASSERT_EQ(BigIntVal(1024), result);//assert result equal to 1024
+
+    BitmapValue bitmap3 = BitmapValue({1024, 1});
+    bit_str = convert_bitmap_to_string(ctx, bitmap3);
+    result = BitmapFunctions::bitmap_max(ctx, bit_str);
+    ASSERT_EQ(BigIntVal(1024), result);
+    
+    BitmapValue bitmap4 = BitmapValue({1024, 2048, 4096});
+    bit_str = convert_bitmap_to_string(ctx, bitmap4);
+    result = BitmapFunctions::bitmap_max(ctx, bit_str);
+    ASSERT_EQ(BigIntVal(4096), result);
+}
+
 // test intersect_count
 template <typename ValType, typename ValueType>
 void test_bitmap_intersect(FunctionContext* ctx, ValType key1, ValType key2) {
@@ -341,6 +369,20 @@ TEST_F(BitmapFunctionsTest, bitmap_and) {
     StringVal bitmap_dst = convert_bitmap_to_string(ctx, bitmap2);
 
     StringVal bitmap_str = BitmapFunctions::bitmap_and(ctx, bitmap_src, bitmap_dst);
+    BigIntVal result = BitmapFunctions::bitmap_count(ctx, bitmap_str);
+
+    BigIntVal expected(1);
+    ASSERT_EQ(expected, result);
+}
+
+TEST_F(BitmapFunctionsTest, bitmap_andnot) {
+    BitmapValue bitmap1({1024, 1, 2029});
+    BitmapValue bitmap2({33, 44, 2019});
+
+    StringVal bitmap_src = convert_bitmap_to_string(ctx, bitmap1);
+    StringVal bitmap_dst = convert_bitmap_to_string(ctx, bitmap2);
+
+    StringVal bitmap_str = BitmapFunctions::bitmap_andnot(ctx, bitmap_src, bitmap_dst);
     BigIntVal result = BitmapFunctions::bitmap_count(ctx, bitmap_str);
 
     BigIntVal expected(1);

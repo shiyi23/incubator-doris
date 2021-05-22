@@ -1,7 +1,7 @@
 ---
 {
-    "title": "bitmap_andnot",
-    "language": "en"
+    "title": "bitmap_max",
+    "language": "zh-CN"
 }
 ---
 
@@ -24,19 +24,22 @@ specific language governing permissions and limitations
 under the License.
 -->
 
-# bitmap_andnot
+# bitmap_max
 ## description
 ### Syntax
 
-`BITMAP BITMAP_ANDNOT(BITMAP lhs, BITMAP rhs)`
+`BIGINT BITMAP_MAX(BITMAP input)`
 
-Compute the andnot result of two inputs bitmap, return the new bitmap.
+计算并返回 bitmap 中的最大值.
 
 ## example
+
 ```
 
 ```
 
 ## keyword
-    
-    BITMAP_ANDNOT,BITMAP
+
+    BITMAP_MAX,BITMAP
+
+
